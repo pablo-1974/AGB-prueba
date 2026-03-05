@@ -971,6 +971,38 @@ def render_sidebar(usuario):
                     st.success("✔ Contraseña actualizada.")
         st.markdown("---")
 
+##################################
+# ADMIN -- STATS
+##################################
+def render_admin_stats(usuario):
+    if usuario["role"] != "admin":
+        return
+
+    st.divider()
+    st.header("📈 Estadísticas de uso")
+
+    est = obtener_estadisticas()
+    if est is None:
+        st.info("Todavía no hay reservas registradas para generar estadísticas.")
+        return
+
+    st.subheader("📊 Reservas por aula")
+    st.bar_chart(est["por_aula"])
+    st.dataframe(est["por_aula"].reset_index().rename(columns={"id": "Reservas"}))
+
+    st.subheader("👩‍🏫 Reservas por profesor")
+    st.bar_chart(est["por_profesor"])
+    st.dataframe(est["por_profesor"].reset_index().rename(columns={"id": "Reservas"}))
+
+    st.subheader("🗓 Reservas por día de la semana")
+    st.bar_chart(est["por_dia"])
+    st.dataframe(est["por_dia"].reset_index().rename(columns={"id": "Reservas"}))
+
+    st.subheader("⏰ Reservas por franja horaria")
+    st.bar_chart(est["por_franja"])
+    st.dataframe(est["por_franja"].reset_index().rename(columns={"id": "Reservas"}))
+
+
 # ======================================
 #   MAIN
 # ======================================
