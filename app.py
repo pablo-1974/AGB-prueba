@@ -263,6 +263,19 @@ def delete_reservations_range(room_id: int, start_date: date, end_date: date) ->
         conn.commit()
         return deleted
 
+def get_all_reservations_by_user(user_id: int):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT r.id, r.room_id, r.fecha, r.slot_index, r.reserved_by_id, r.notes, r.created_at,
+                   rooms.name AS room_name
+            FROM reservations r
+            JOIN rooms ON rooms.id = r.room_id
+            WHERE r.reserved_by_id = %s
+            ORDER BY r.fecha ASC, r.slot_index ASC
+        """, (user_id,))
+        return cur.fetchall()
+
 # ======================================
 #   CUADRANTE / DATAFRAME — PostgreSQL
 # ======================================
@@ -677,7 +690,50 @@ def render_create_reservation(usuario, room_id, week_monday):
         (st.success if ok else st.error)(msg)
 
 def render_cancel_reservation(usuario, room_id, week_monday):
-    st.markdown("### 🧾 Cancelar reserva")
+    # ============================
+    # PROFESOR: ver TODAS SUS RESERVAS globales
+    # ============================
+    if usuario["role"] == "profesor":
+        st.markdown("### 🧾 Tus reservas (todas las aulas y fechas)")
+
+        reservas = get_all_reservations_by_user(usuario["id"])
+
+        if not reservas:
+            st.info("No tienes reservas para cancelar.")
+            return
+
+        opciones = []
+        for r in reservas:
+            rid, room_id_r, fecha, slot, by_id, notes_r, created_at, room_name = r
+            etiqueta = (
+                f"{fecha.strftime('%d/%m/%Y')} · "
+                f"{room_name} · "
+                f"{DIAS_ES[fecha.weekday()]} · "
+                f"{SLOTS[slot][0]}–{SLOTS[slot][1]}"
+            )
+            if notes_r:
+                etiqueta += f" · {notes_r}"
+            opciones.append((rid, etiqueta))
+
+        sel = st.selectbox(
+            "Selecciona la reserva a cancelar:",
+            [None] + opciones,
+            index=0,
+            format_func=lambda x: "" if x is None else x[1],
+            key="prof_cancel_sel"
+        )
+
+        if st.button("Cancelar reserva", key="cancel_prof_btn", disabled=(sel is None)):
+            delete_reservation(sel[0])
+            st.success("Reserva cancelada.")
+        return
+
+    # ============================
+    # ADMIN: ver reservas de ESTA AULA y ESTA SEMANA
+    # ============================
+
+    st.markdown("### 🧾 Cancelar reserva en esta semana y aula")
+
     if room_id is None:
         st.info("Selecciona un aula para ver/cancelar reservas.")
         return
@@ -689,20 +745,29 @@ def render_cancel_reservation(usuario, room_id, week_monday):
     opciones = []
     for r in reservas:
         rid, _, fdate, slot, by_id, notes_r, _ = r
-        etiqueta = f"{fdate.strftime('%d/%m')} · {DIAS_ES[fdate.weekday()]} · {SLOTS[slot][0]}–{SLOTS[slot][1]} · {users_map.get(by_id, '—')}"
+        etiqueta = (
+            f"{fdate.strftime('%d/%m/%Y')} · "
+            f"{DIAS_ES[fdate.weekday()]} · "
+            f"{SLOTS[slot][0]}–{SLOTS[slot][1]} · "
+            f"{users_map.get(by_id, '—')}"
+        )
         if notes_r:
             etiqueta += f" · {notes_r}"
-        if usuario["role"] == "profesor" and by_id != usuario["id"]:
-            continue
         opciones.append((rid, etiqueta))
 
     if not opciones:
-        st.info("No tienes reservas que puedas cancelar.")
+        st.info("No hay reservas en esta semana para este aula.")
         return
 
-    sel = st.selectbox("Reserva", [None] + opciones, index=0, format_func=lambda x: "" if x is None else x[1],
-                       key="reserve_cancel_sel")
-    if st.button("Cancelar", key="btn_cancelar", disabled=(sel is None)):
+    sel = st.selectbox(
+        "Reserva",
+        [None] + opciones,
+        index=0,
+        format_func=lambda x: "" if x is None else x[1],
+        key="reserve_cancel_sel_admin"
+    )
+
+    if st.button("Cancelar", key="btn_cancelar_admin", disabled=(sel is None)):
         delete_reservation(sel[0])
         st.warning("Reserva cancelada.")
 
