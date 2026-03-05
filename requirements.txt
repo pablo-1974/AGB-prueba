@@ -1,0 +1,17 @@
+# Framework UI
+streamlit>=1.31,<2.0
+
+# Datos
+pandas>=2.1
+
+# PostgreSQL (driver binario, sin compilar)
+psycopg2-binary>=2.9
+
+# Excel
+openpyxl>=3.1
+
+# PDF (opcional: si no quieres PDF, elimina esta línea)
+reportlab>=4.0
+
+# Variables de entorno (recomendado en local con .env)
+python-dotenv>=1.0
