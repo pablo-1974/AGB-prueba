@@ -1159,8 +1159,23 @@ def main():
 
     usuario = st.session_state["user"]
     render_sidebar(usuario)
-
-    st.title("📚 Reserva de Aulas — IES Antonio García Bellido")
+    
+    # --- LOGO + TÍTULOS ---
+    col_logo, col_title = st.columns([1, 4])
+    
+    with col_logo:
+        try:
+            st.image("logo.png", width=120)
+        except:
+            pass
+    
+    with col_title:
+        st.markdown("""
+            <div style="line-height: 1.1; padding-top: 10px;">
+                <h1 style="margin-bottom: 0px;">Reserva de Aulas</h1>
+                <h4 style="margin-top: 2px; color: #444;">IES Antonio García Bellido</h4>
+            </div>
+        """, unsafe_allow_html=True)
 
     # Navegación semanal
     week_monday = render_week_navigation()
