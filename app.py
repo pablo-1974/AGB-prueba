@@ -61,6 +61,18 @@ def verify_password(pwd: str, stored: str) -> bool:
     except Exception:
         return False
 
+def build_day_options_with_dates(week_monday: date):
+    """
+    Devuelve una lista de (idx, label) para los 5 días lectivos de la semana dada.
+    Ejemplo de label: 'Lunes 09/03/26'
+    """
+    dias = [week_monday + timedelta(days=i) for i in range(5)]
+    options = []
+    for i, d in enumerate(dias):
+        label = f"{DIAS_ES[i]} {d.strftime('%d/%m/%y')}"
+        options.append((i, label))
+    return options
+
 # ====== Aulas ======
 def get_rooms():
     with get_conn() as conn:
@@ -662,10 +674,38 @@ def render_create_reservation(usuario, room_id, week_monday):
             reserved_by_id = usuario["id"]
             st.info(f"Reservando en nombre de **{usuario['name']}**")
         else:
-            reserved_by_id = _select_profesor_placeholder("reserve_prof")
+            profesores = list_profesores(include_suspended=False)
+            if not profesores:
+                st.error("No hay profesores activos registrados.")
+                return
+            pm = {pid: f"{n} ({e})" for pid, n, e in profesores}
+            reserved_by_id = st.selectbox(
+                "Profesor",
+                [None] + list(pm.keys()),
+                index=0,
+                format_func=lambda x: "" if x is None else pm[x],
+                key="reserve_prof"
+            )
 
-    day_idx = _select_dia_placeholder("reserve_day")
-    slot_idx = _select_slot_placeholder("reserve_slot")
+    # Día con etiqueta "Día + fecha" y placeholder en blanco
+    day_options = build_day_options_with_dates(week_monday)  # [(0,"Lunes 09/03/26"), ...]
+    day_idx = st.selectbox(
+        "Día",
+        [None] + [opt[0] for opt in day_options],
+        index=0,
+        format_func=lambda i: "" if i is None else dict(day_options)[i],
+        key="reserve_day"
+    )
+
+    # Hora con placeholder en blanco
+    slot_idx = st.selectbox(
+        "Hora",
+        [None] + list(range(len(SLOTS))),
+        index=0,
+        format_func=lambda i: "" if i is None else f"{SLOTS[i][0]}–{SLOTS[i][1]}",
+        key="reserve_slot"
+    )
+
     notes = st.text_input("Notas", key="reserve_notes")
 
     disabled = any(v is None for v in (reserved_by_id, day_idx, slot_idx))
@@ -673,6 +713,7 @@ def render_create_reservation(usuario, room_id, week_monday):
         fecha = week_monday + timedelta(days=day_idx)
         hoy = date.today()
 
+        # Reglas para profesor (admin sin límites)
         if usuario["role"] == "profesor":
             if fecha < hoy:
                 st.error("Día pasado.")
@@ -930,26 +971,51 @@ def render_admin_user_management(usuario):
 def render_recurring_reservations(usuario):
     if usuario["role"] != "admin":
         return
+
     st.subheader("📆 Reservas recurrentes")
+
     profesores = list_profesores(include_suspended=False)
     if not profesores:
         st.warning("No hay profesores activos. Importa o crea alguno primero.")
         return
 
     mp = {pid: f"{n} ({e})" for pid, n, e in profesores}
-    pid = st.selectbox("Profesor", [None] + list(mp.keys()), index=0,
-                       format_func=lambda x: "" if x is None else mp[x],
-                       key="rec_pid")
+    pid = st.selectbox(
+        "Profesor",
+        [None] + list(mp.keys()),
+        index=0,
+        format_func=lambda x: "" if x is None else mp[x],
+        key="rec_pid"
+    )
+
     rm = {rid: name for rid, name in get_rooms()}
-    room_rec = st.selectbox("Aula", [None] + list(rm.keys()), index=0,
-                            format_func=lambda r: "" if r is None else rm[r],
-                            key="rec_room")
-    day_idx_rec = st.selectbox("Día semanal", [None] + list(range(5)), index=0,
-                               format_func=lambda i: "" if i is None else DIAS_ES[i],
-                               key="rec_day")
-    slot_idx_rec = st.selectbox("Franja horaria", [None] + list(range(len(SLOTS))), index=0,
-                                format_func=lambda i: "" if i is None else f"{SLOTS[i][0]}–{SLOTS[i][1]}",
-                                key="rec_slot")
+    room_rec = st.selectbox(
+        "Aula",
+        [None] + list(rm.keys()),
+        index=0,
+        format_func=lambda r: "" if r is None else rm[r],
+        key="rec_room"
+    )
+
+    # Día semanal con etiqueta “Día + fecha” (usamos lunes de la semana actual como base de texto)
+    monday_today = lunes_de_semana(date.today())
+    day_options_rec = build_day_options_with_dates(monday_today)
+    day_idx_rec = st.selectbox(
+        "Día semanal",
+        [None] + [opt[0] for opt in day_options_rec],
+        index=0,
+        format_func=lambda i: "" if i is None else dict(day_options_rec)[i],
+        key="rec_day"
+    )
+
+    slot_idx_rec = st.selectbox(
+        "Franja horaria",
+        [None] + list(range(len(SLOTS))),
+        index=0,
+        format_func=lambda i: "" if i is None else f"{SLOTS[i][0]}–{SLOTS[i][1]}",
+        key="rec_slot"
+    )
+
     notes_rec = st.text_input("Notas", key="rec_notes")
 
     disabled = any(v is None for v in (pid, room_rec, day_idx_rec, slot_idx_rec))
@@ -958,6 +1024,7 @@ def render_recurring_reservations(usuario):
         fin = fin_de_curso(hoy)
         delta = (day_idx_rec - hoy.weekday()) % 7
         fecha = hoy + timedelta(days=delta)
+
         creadas = 0
         conflictos = 0
         while fecha <= fin:
@@ -971,6 +1038,7 @@ def render_recurring_reservations(usuario):
             else:
                 conflictos += 1
             fecha += timedelta(days=7)
+
         st.success(f"✔ {creadas} reservas creadas.")
         if conflictos:
             st.warning(f"⚠ {conflictos} conflictos omitidos.")
