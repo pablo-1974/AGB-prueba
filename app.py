@@ -1190,28 +1190,26 @@ def render_admin_stats(usuario):
 
 def main():
     st.set_page_config(page_title="Reserva de Aulas", layout="wide")
-    
+
     # Estilo global: fondo verde degradado + inputs mejorados
     st.markdown("""
     <style>
-    /* --- Fondo general verde degradado --- */
+    /* Fondo general */
     .stApp {
-        background: linear-gradient(to bottom right, #c7f9cc, #80ed99);
+        background: linear-gradient(to bottom right, #f2fbf5, #e1f5e8);
     }
-    
-    /* Contenedor del login centrado */
+    /* Contenedor del login */
     .login-container {
-        background-color: rgba(255,255,255,0.85);
+        background-color: rgba(255,255,255,0.90);
         padding: 30px;
         border-radius: 12px;
         width: 420px;
         margin: auto;
         margin-top: 60px;
         text-align: center;
-        box-shadow: 0px 4px 14px rgba(0,0,0,0.15);
+        box-shadow: 0px 4px 14px rgba(0,0,0,0.1);
     }
-    
-    /* Inputs con borde suave */
+    /* Inputs */
     input[type="text"], input[type="password"] {
         border: 1px solid #666 !important;
         background-color: #f8f8f8 !important;
@@ -1219,52 +1217,52 @@ def main():
     }
     </style>
     """, unsafe_allow_html=True)
-    
+
     init_db()
 
+    # Flujo de autenticación
     if no_users_exist():
         bootstrap_admin_screen()
         return
+
     if "needs_password_setup" in st.session_state:
         first_password_screen()
         return
+
     if "ask_password" in st.session_state:
         password_login_screen()
         return
+
+    # LOGIN (solo si no hay usuario en sesión)
     if "user" not in st.session_state:
         login_screen()
         return
 
+    # Ya hay usuario en sesión
     usuario = st.session_state["user"]
+
+    # Sidebar
     render_sidebar(usuario)
-    
-    # --- LOGO + TÍTULOS ---
-    col_logo, col_title = st.columns([1, 4])
-    
-    with col_logo:
-        try:
-            st.image("logo.png", width=120)
-        except:
-            pass
-    
-    with col_title:
-        st.markdown("""
-            <div style="line-height: 1.1; padding-top: 10px;">
-                <h1 style="margin-bottom: 0px;">Reserva de Aulas</h1>
-                <h4 style="margin-top: 2px; color: #444;">IES Antonio García Bellido</h4>
-            </div>
-        """, unsafe_allow_html=True)
+
+    # LOGO + TÍTULOS CENTRADOS
+    st.markdown("""
+    <div style="text-align: center; padding-top: 10px;">
+        <img src="logo.png" width="120">
+        <h1 style="margin-bottom: 0px;">Reserva de Aulas</h1>
+        <h4 style="margin-top: 4px; color: #444;">IES Antonio García Bellido</h4>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Navegación semanal
     week_monday = render_week_navigation()
 
-    # Selector de aula (en blanco inicialmente)
+    # Selector de aula
     room_id, room_name = render_room_selector()
 
-    # Cuadrante semanal
+    # Cuadrante
     df_sem = render_weekly_grid(room_id, room_name, week_monday)
 
-    # Para NO admins: acciones básicas debajo del cuadrante
+    # PROFESOR → no pestañas
     if usuario["role"] != "admin":
         st.divider()
         col1, col2 = st.columns(2)
@@ -1274,7 +1272,7 @@ def main():
             render_cancel_reservation(usuario, room_id, week_monday)
         return
 
-    # Para ADMIN: pestañas superiores (sin saltos automáticos)
+    # ADMIN
     st.divider()
     tabs = st.tabs([
         "📌 Reservas",
