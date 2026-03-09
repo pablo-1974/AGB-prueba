@@ -494,96 +494,106 @@ def obtener_estadisticas():
 #   AUTENTICACIÓN STREAMLIT
 # ======================================
 
-def login_screen():
-    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-
-    # LOGO (centrado)
-    try:
-        st.image("logo.png", width=140)
-    except:
-        st.write("")
-
-    # TÍTULO
+def apply_custom_styles():
+    """Función para no repetir el CSS en cada pantalla"""
     st.markdown("""
-        <h2 style="margin-top: 10px; margin-bottom: 2px;">Reserva de aulas</h2>
-        <h4 style="color: #333; font-weight: normal; margin-top: 0px;">
-            IES Antonio García Bellido
-        </h4>
+    <style>
+    .stApp {
+        background: linear-gradient(135deg, #C2A8F9 0%, #C9B6FF 50%, #E6D9FF 100%);
+    }
+    .login-card {
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 2.5rem;
+        border-radius: 1.5rem;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        max-width: 450px;
+        margin: auto;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(10px);
+    }
+    .login-title { color: #3E2AA3; font-size: 1.8rem; font-weight: 800; text-align: center; margin-bottom: 0.2rem; }
+    .login-subtitle { color: #475569; font-size: 0.9rem; text-align: center; margin-bottom: 2rem; }
+    
+    /* Redondear inputs de Streamlit */
+    div[data-baseweb="input"] { border-radius: 0.5rem !important; }
+    
+    /* Botón estilo Indigo */
+    div.stButton > button {
+        width: 100%;
+        background-color: #4F46E5 !important;
+        color: white !important;
+        border-radius: 0.5rem !important;
+        border: none !important;
+        height: 3rem;
+        font-weight: 600 !important;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("<hr>", unsafe_allow_html=True)
+def login_screen():
+    apply_custom_styles()
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    
+    # Logo opcional
+    try: st.image("logo.png", width=100)
+    except: pass
 
-    # Email y password en la MISMA pantalla
-    email = st.text_input("Email institucional", key="login_email")
-    password = st.text_input("Contraseña", type="password", key="login_password")
+    st.markdown('<h1 class="login-title">Reserva de aulas</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="login-subtitle">IES Antonio García Bellido</p>', unsafe_allow_html=True)
 
-    login_btn = st.button("Entrar", key="login_btn")
-
-    if login_btn:
+    email = st.text_input("Email institucional", placeholder="usuario@educa.jcyl.es", key="login_email")
+    password = st.text_input("Contraseña", type="password", placeholder="••••••••", key="login_password")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("Entrar"):
         u = get_user_by_email(email)
         if not u:
             st.error("Email no registrado.")
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
+        else:
+            uid, name, email, role, status, pwd_hash = u
+            if role == "profesor" and status != "activo":
+                st.error("Cuenta suspendida.")
+                return
+            
+            # Lógica de primer acceso (sin contraseña aún)
+            if pwd_hash is None:
+                st.session_state["pending_user"] = {"id": uid, "name": name, "email": email, "role": role, "status": status}
+                st.session_state["needs_password_setup"] = True
+                st.rerun()
+            
+            # Validación normal
+            if not password:
+                st.warning("Introduce la contraseña.")
+            elif verify_password(password, pwd_hash):
+                st.session_state["user"] = {"id": uid, "name": name, "email": email, "role": role, "status": status}
+                st.rerun()
+            else:
+                st.error("Contraseña incorrecta.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        uid, name, email, role, status, pwd_hash = u
+def password_login_screen():
+    """Sustituye también esta para que no se rompa la estética"""
+    apply_custom_styles()
+    u = st.session_state["login_user"]
+    uid, name, email, role, status, pwd_hash = u
 
-        if role == "profesor" and status != "activo":
-            st.error("Tu cuenta está suspendida. Contacta con un administrador.")
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown('<h1 class="login-title">🔑 Seguridad</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="login-subtitle">Hola {name}, introduce tu contraseña</p>', unsafe_allow_html=True)
 
-        # Primer acceso sin contraseña
-        if pwd_hash is None:
-            st.session_state["pending_user"] = {
-                "id": uid,
-                "name": name,
-                "email": email,
-                "role": role,
-                "status": status
-            }
-            st.session_state["needs_password_setup"] = True
-            st.rerun()
-
-        # Falta contraseña
-        if not password:
-            st.error("Introduce la contraseña.")
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
-
-        # Login correcto
-        if verify_password(password, pwd_hash):
-            st.session_state["user"] = {
-                "id": uid,
-                "name": name,
-                "email": email,
-                "role": role,
-                "status": status
-            }
-            st.markdown("</div>", unsafe_allow_html=True)
+    pwd = st.text_input("Contraseña", type="password", key="pl_pass")
+    
+    if st.button("Confirmar Acceso"):
+        if verify_password(pwd, pwd_hash):
+            st.session_state["user"] = {"id": uid, "name": name, "email": email, "role": role, "status": status}
+            st.session_state.pop("login_user", None)
+            st.session_state.pop("ask_password", None)
             st.rerun()
         else:
             st.error("Contraseña incorrecta.")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def first_password_screen():
-    u = st.session_state["pending_user"]
-    st.title("🔑 Crear contraseña nueva")
-    st.write(f"Usuario: **{u['name']}** ({u['email']})")
-    pwd1 = st.text_input("Nueva contraseña", type="password", key="fp_p1")
-    pwd2 = st.text_input("Repetir contraseña", type="password", key="fp_p2")
-    if st.button("Guardar contraseña", key="fp_save"):
-        if pwd1 != pwd2:
-            st.error("Las contraseñas no coinciden.")
-            return
-        if len(pwd1) < 4:
-            st.error("Debe tener al menos 4 caracteres.")
-            return
-        set_user_password(u["id"], hash_password_secure(pwd1))
-        st.success("Contraseña creada. Inicia sesión.")
-        st.session_state.clear()
-        st.rerun()
+            
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def password_login_screen():
     u = st.session_state["login_user"]
